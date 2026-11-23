@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Jarvis Piano Lab</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #38bdf8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --gold: #f59e0b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      display: flex; flex-direction: column; min-height: 100vh; padding: 14px;
+    }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--card); padding: 10px 14px; border-radius: 14px; margin-bottom: 14px;
+      font-weight: 700; font-size: 14px;
+    }
+    .badge { display: flex; align-items: center; gap: 5px; }
+    .progress-wrap {
+      width: 100%; height: 10px; background: #334155; border-radius: 99px; overflow: hidden; margin-bottom: 16px;
+    }
+    .progress-bar { height: 100%; width: 0%; background: var(--green); transition: width 0.3s ease; }
+    .card {
+      background: var(--card); border-radius: 18px; padding: 18px; margin-bottom: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    .unit-tag { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-weight: 700; }
+    h2 { margin: 6px 0 10px; font-size: 20px; }
+    p.desc { margin: 0 0 14px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+    .btn {
+      background: var(--accent); color: #0f172a; border: none; border-radius: 12px;
+      padding: 12px 16px; font-weight: 800; font-size: 15px; cursor: pointer; width: 100%;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-secondary { background: #334155; color: var(--text); margin-bottom: 10px; }
+    .btn-green { background: var(--green); color: #052e16; }
+    .piano-wrap {
+      position: relative; height: 175px; margin: 12px 0; display: flex;
+      background: #020617; padding: 6px; border-radius: 14px; overflow-x: auto;
+    }
+    .white-key {
+      flex: 1; min-width: 36px; height: 100%; background: #f8fafc; border: 1px solid #cbd5e1;
+      border-radius: 0 0 8px 8px; position: relative; z-index: 1; cursor: pointer;
+      display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px;
+      color: #475569; font-size: 11px; font-weight: 700;
+    }
+    .white-key.active, .white-key:active { background: #bae6fd; }
+    .white-key.selected { background: #38bdf8; color: #0f172a; }
+    .black-key {
+      width: 24px; height: 62%; background: #0f172a; border: 1px solid #334155;
+      border-radius: 0 0 6px 6px; position: absolute; top: 6px; z-index: 2; cursor: pointer;
+    }
+    .black-key.active, .black-key:active { background: #0284c7; }
+    .black-key.selected { background: #38bdf8; }
+    .feedback {
+      padding: 12px; border-radius: 12px; font-weight: 700; font-size: 14px;
+      margin-top: 10px; display: none;
+    }
+    .feedback.ok { display: block; background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid var(--green); }
+    .feedback.err { display: block; background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid var(--red); }
+    .unit-list { display: flex; flex-direction: column; gap: 10px; }
+    .unit-item {
+      background: #0f172a; border: 1px solid #334155; border-radius: 14px; padding: 14px;
+      display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+    }
+    .unit-item.locked { opacity: 0.45; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="badge">🔥 <span id="streak">0</span> días</div>
+    <div class="badge">⚡ <span id="xp">0</span> XP</div>
+    <div class="badge">❤️ <span id="hearts">5</span></div>
+  </div>
+
+  <div id="home-view">
+    <div class="card">
+      <div class="unit-tag">Jarvis Music Lab</div>
+      <h2>Ruta de Piano y Oído</h2>
+      <p class="desc">Completa lecciones cortas de 5 retos. Toca el teclado táctil para practicar sin instrumento físico.</p>
+      <div class="unit-list" id="unit-list"></div>
+    </div>
+  </div>
+
+  <div id="lesson-view" style="display:none;">
+    <div class="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+    <div class="card">
+      <div class="unit-tag" id="q-type">RETO</div>
+      <h2 id="q-title">Pregunta</h2>
+      <p class="desc" id="q-desc">Instrucción</p>
+      <button class="btn btn-secondary" id="btn-play-audio" style="display:none;">🔊 Escuchar sonido de referencia</button>
+      <div class="piano-wrap" id="piano"></div>
+      <div class="feedback" id="feedback"></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-green" id="btn-check">Comprobar respuesta</button>
+        <button class="btn" id="btn-next" style="display:none;">Continuar →</button>
+      </div>
+    </div>
+    <button class="btn btn-secondary" onclick="volverInicio()">← Salir de la lección</button>
+  </div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const NOTES = [
+    { name: "C4", label: "Do", freq: 261.63, black: false },
+    { name: "C#4", label: "Do#", freq: 277.18, black: true },
+    { name: "D4", label: "Re", freq: 293.66, black: false },
+    { name: "D#4", label: "Re#", freq: 311.13, black: true },
+    { name: "E4", label: "Mi", freq: 329.63, black: false },
+    { name: "F4", label: "Fa", freq: 349.23, black: false },
+    { name: "F#4", label: "Fa#", freq: 369.99, black: true },
+    { name: "G4", label: "Sol", freq: 392.00, black: false },
+    { name: "G#4", label: "Sol#", freq: 415.30, black: true },
+    { name: "A4", label: "La", freq: 440.00, black: false },
+    { name: "A#4", label: "La#", freq: 466.16, black: true },
+    { name: "B4", label: "Si", freq: 493.88, black: false },
+    { name: "C5", label: "Do5", freq: 523.25, black: false }
+  ];
+
+  const UNITS = [
+    {
+      id: 0, title: "Unidad 1: Notas naturales", desc: "Ubica Do, Re, Mi, Fa, Sol, La y Si en el teclado",
+      questions: [
+        { type: "Teclado", title: "Pulsa la nota Do (C4)", desc: "Es la tecla blanca justo a la izquierda del grupo de 2 teclas negras.", target: ["C4"], audio: ["C4"] },
+        { type: "Teclado", title: "Pulsa la nota Fa (F4)", desc: "Está justo a la izquierda del grupo de 3 teclas negras.", target: ["F4"], audio: ["F4"] },
+        { type: "Oído", title: "¿Qué nota suena?", desc: "Escucha la referencia y selecciónala en el piano.", target: ["G4"], audio: ["G4"], playFirst: true },
+        { type: "Teclado", title: "Pulsa la nota La (A4 - 440 Hz)", desc: "La nota estándar de afinación.", target: ["A4"], audio: ["A4"] },
+        { type: "Oído", title: "Identifica la nota aguda", desc: "Escucha y pulsa la tecla correspondiente.", target: ["E4"], audio: ["E4"], playFirst: true }
+      ]
+    },
+    {
+      id: 1, title: "Unidad 2: Alteraciones y Semitonos", desc: "Domina los sostenidos (#) y bemoles (b)",
+      questions: [
+        { type: "Teclado", title: "Pulsa Do sostenido (C#4)", desc: "Un semitono por encima de Do.", target: ["C#4"], audio: ["C#4"] },
+        { type: "Teclado", title: "Pulsa Fa sostenido (F#4)", desc: "Primera tecla negra del grupo de tres.", target: ["F#4"], audio: ["F#4"] },
+        { type: "Teclado", title: "Pulsa Si bemol (Bb4 / A#4)", desc: "Un semitono por debajo de Si.", target: ["A#4"], audio: ["A#4"] },
+        { type: "Oído", title: "Oído: ¿Natural o sostenido?", desc: "Escucha y marca la tecla exacta.", target: ["D#4"], audio: ["D#4"], playFirst: true },
+        { type: "Teclado", title: "Pulsa Sol sostenido (G#4)", desc: "Tecla negra central del grupo de tres.", target: ["G#4"], audio: ["G#4"] }
+      ]
+    },
+    {
+      id: 2, title: "Unidad 3: Acordes Mayores y Menores", desc: "Construye tríadas de 3 notas simultáneas",
+      questions: [
+        { type: "Acorde", title: "Construye Do Mayor (C)", desc: "Selecciona las 3 notas: Do + Mi + Sol.", target: ["C4", "E4", "G4"], audio: ["C4", "E4", "G4"], multi: true },
+        { type: "Acorde", title: "Construye La menor (Am)", desc: "Selecciona: La + Do5 + Mi (usa Do4 si prefieres inversión).", target: ["C4", "E4", "A4"], audio: ["C4", "E4", "A4"], multi: true },
+        { type: "Acorde", title: "Construye Fa Mayor (F)", desc: "Selecciona: Fa + La + Do5.", target: ["F4", "A4", "C5"], audio: ["F4", "A4", "C5"], multi: true },
+        { type: "Acorde", title: "Construye Sol Mayor (G)", desc: "Selecciona: Sol + Si + Re (usa D4, G4, B4).", target: ["D4", "G4", "B4"], audio: ["D4", "G4", "B4"], multi: true },
+        { type: "Oído", title: "Acorde misterioso", desc: "Escucha la tríada y marca sus 3 notas (Do - Mi - Sol).", target: ["C4", "E4", "G4"], audio: ["C4", "E4", "G4"], multi: true, playFirst: true }
+      ]
+    }
+  ];
+
+  let state = JSON.parse(localStorage.getItem("jarvis_piano_state") || '{"xp":0,"streak":1,"hearts":5,"unlocked":0,"lastDay":""}');
+  const today = new Date().toISOString().slice(0, 10);
+  if (state.lastDay !== today) {
+    state.hearts = 5;
+    state.lastDay = today;
+    saveState();
+  }
+
+  function saveState() {
+    localStorage.setItem("jarvis_piano_state", JSON.stringify(state));
+    document.getElementById("xp").textContent = state.xp;
+    document.getElementById("streak").textContent = state.streak;
+    document.getElementById("hearts").textContent = state.hearts;
+  }
+
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playFreq(freq, duration = 0.65) {
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.28, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  }
+
+  function playNoteList(noteNames) {
+    noteNames.forEach((n, idx) => {
+      const obj = NOTES.find(x => x.name === n);
+      if (obj) setTimeout(() => playFreq(obj.freq, 0.8), idx * 140);
+    });
+  }
+
+  let currentUnit = null, qIdx = 0, selectedNotes = [];
+
+  function renderUnits() {
+    saveState();
+    const list = document.getElementById("unit-list");
+    list.innerHTML = "";
+    UNITS.forEach((u, i) => {
+      const locked = i > state.unlocked;
+      const div = document.createElement("div");
+      div.className = "unit-item" + (locked ? " locked" : "");
+      div.innerHTML = `<div><strong>${u.title}</strong><div style="font-size:12px;color:#94a3b8;margin-top:4px;">${u.desc}</div></div><div>${locked ? "🔒" : "▶️"}</div>`;
+      if (!locked) div.onclick = () => startUnit(i);
+      list.appendChild(div);
+    });
+  }
+
+  function buildPiano() {
+    const piano = document.getElementById("piano");
+    piano.innerHTML = "";
+    const whites = NOTES.filter(n => !n.black);
+    whites.forEach(n => {
+      const k = document.createElement("div");
+      k.className = "white-key";
+      k.dataset.note = n.name;
+      k.textContent = n.label;
+      k.onclick = () => toggleKey(n, k);
+      piano.appendChild(k);
+    });
+    const whiteW = 100 / whites.length;
+    let wIndex = 0;
+    NOTES.forEach(n => {
+      if (!n.black) { wIndex++; return; }
+      const bk = document.createElement("div");
+      bk.className = "black-key";
+      bk.dataset.note = n.name;
+      bk.style.left = `calc(${wIndex * whiteW}% - 12px)`;
+      bk.onclick = (e) => { e.stopPropagation(); toggleKey(n, bk); };
+      piano.appendChild(bk);
+    });
+  }
+
+  function toggleKey(noteObj, el) {
+    playFreq(noteObj.freq, 0.5);
+    const q = currentUnit.questions[qIdx];
+    if (!q.multi) {
+      selectedNotes = [noteObj.name];
+      document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("selected"));
+      el.classList.add("selected");
+    } else {
+      if (selectedNotes.includes(noteObj.name)) {
+        selectedNotes = selectedNotes.filter(x => x !== noteObj.name);
+        el.classList.remove("selected");
+      } else {
+        selectedNotes.push(noteObj.name);
+        el.classList.add("selected");
+      }
+    }
+  }
+
+  function startUnit(idx) {
+    if (state.hearts <= 0) { alert("Sin vidas hoy. Vuelve mañana o repasa notas libres."); return; }
+    currentUnit = UNITS[idx];
+    qIdx = 0;
+    document.getElementById("home-view").style.display = "none";
+    document.getElementById("lesson-view").style.display = "block";
+    loadQuestion();
+  }
+
+  function loadQuestion() {
+    selectedNotes = [];
+    const q = currentUnit.questions[qIdx];
+    document.getElementById("progress-bar").style.width = `${(qIdx / currentUnit.questions.length) * 100}%`;
+    document.getElementById("q-type").textContent = `${currentUnit.title} • ${q.type}`;
+    document.getElementById("q-title").textContent = q.title;
+    document.getElementById("q-desc").textContent = q.desc;
+    const fb = document.getElementById("feedback");
+    fb.className = "feedback"; fb.textContent = "";
+    document.getElementById("btn-check").style.display = "block";
+    document.getElementById("btn-next").style.display = "none";
+    const btnAudio = document.getElementById("btn-play-audio");
+    if (q.playFirst) {
+      btnAudio.style.display = "block";
+      btnAudio.onclick = () => playNoteList(q.audio);
+      setTimeout(() => playNoteList(q.audio), 350);
+    } else {
+      btnAudio.style.display = "none";
+    }
+    buildPiano();
+  }
+
+  document.getElementById("btn-check").onclick = () => {
+    if (!selectedNotes.length) return;
+    const q = currentUnit.questions[qIdx];
+    const a = [...selectedNotes].sort().join(",");
+    const b = [...q.target].sort().join(",");
+    const fb = document.getElementById("feedback");
+    if (a === b) {
+      state.xp += 15;
+      fb.className = "feedback ok";
+      fb.textContent = "✅ ¡Exacto! +15 XP";
+      playNoteList(q.audio);
+    } else {
+      state.hearts = Math.max(0, state.hearts - 1);
+      fb.className = "feedback err";
+      fb.textContent = `❌ Era: ${q.target.join(" - ")}`;
+    }
+    saveState();
+    document.getElementById("btn-check").style.display = "none";
+    document.getElementById("btn-next").style.display = "block";
+  };
+
+  document.getElementById("btn-next").onclick = () => {
+    qIdx++;
+    if (qIdx < currentUnit.questions.length && state.hearts > 0) {
+      loadQuestion();
+    } else {
+      if (state.hearts > 0 && currentUnit.id === state.unlocked) {
+        state.unlocked = Math.min(UNITS.length - 1, state.unlocked + 1);
+      }
+      saveState();
+      volverInicio();
+    }
+  };
+
+  function volverInicio() {
+    document.getElementById("lesson-view").style.display = "none";
+    document.getElementById("home-view").style.display = "block";
+    renderUnits();
+  }
+
+  renderUnits();
+</script>
+</body>
+</html>
